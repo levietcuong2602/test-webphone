@@ -18,6 +18,8 @@
       <el-button @click="handleRingback">Ringback</el-button>
       <el-button @click="handleAnswer">Answered</el-button>
       <el-button @click="handleReject">Rejected</el-button>
+      <el-button @click="setMute">setMute</el-button>
+      <el-button @click="setHold">setHold</el-button>
     </div>
 
     <audio ref="localAudio" id="localAudio" controls>
@@ -49,12 +51,17 @@ export default {
         iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }],
       },
       sipPhone: "",
-      session: null,
+      outgoingSession: null,
       incomingSession: null,
+      _mounted: false,
     };
   },
   mounted() {
+    this._mounted = true;
     this.registerUserAgent();
+
+    // event out going session
+    this.eventHandlers();
   },
   methods: {
     // tesst audio player
@@ -114,6 +121,8 @@ export default {
     onConnecting() {
       const me = this;
       this.sipPhone.on("connecting", () => {
+        if (!me._mounted) return;
+
         console.log("UA connecting event");
         me.statusCall = "UA connecting event";
       });
@@ -121,6 +130,8 @@ export default {
     onConnected() {
       const me = this;
       this.sipPhone.on("connected", function () {
+        if (!me._mounted) return;
+
         console.log('UA "connected" event');
         me.statusCall = 'UA "connected" event';
       });
@@ -128,6 +139,8 @@ export default {
     onRegistered() {
       const me = this;
       this.sipPhone.on("registered", function () {
+        if (!me._mounted) return;
+
         console.log('UA "registered" event');
         me.statusCall = 'UA "registered" event';
       });
@@ -135,6 +148,8 @@ export default {
     onUnregistered() {
       const me = this;
       this.sipPhone.on("unregistered", function () {
+        if (!me._mounted) return;
+
         console.log('UA "unregistered" event');
 
         if (me.sipPhone.isConnected()) {
@@ -147,6 +162,7 @@ export default {
     onRegistrationFailed() {
       const me = this;
       this.sipPhone.on("registrationFailed", function (data) {
+        if (!me._mounted) return;
         console.log('UA "registrationFailed" event');
 
         if (me.sipPhone.isConnected()) {
@@ -165,23 +181,24 @@ export default {
     onNewRTCSession() {
       // inbound
       const me = this;
-      const remoteAudio = me.$refs.remoteAudio;
-      const localAudio = me.$refs.localAudio;
       this.sipPhone.on("newRTCSession", function (data) {
+        if (!me._mounted) return;
+
         console.log('UA "newRTCSession" event');
         me.statusCall = 'UA "newRTCSession" event';
 
         const { session } = data;
+        let dtmfSender;
         if (data.originator === "local") return;
-        if (me.session || me.incomingSession) {
-          console.log('incoming call replied with 486 "Busy Here"');
-          session.terminate({
-            status_code: 486,
-            reason_phrase: "Busy Here",
-          });
+        // if (me.outgoingSession || me.incomingSession) {
+        //   console.log('incoming call replied with 486 "Busy Here"');
+        //   session.terminate({
+        //     status_code: 486,
+        //     reason_phrase: "Busy Here",
+        //   });
 
-          return;
-        }
+        //   return;
+        // }
 
         me.handleRinging();
         console.log("Đang đổ chuông ...");
@@ -191,74 +208,110 @@ export default {
           audioPlayer.stop("ringing");
 
           console.log("Cuộc gọi thất bại");
-          me.session = null;
           me.incomingSession = null;
+          me.outgoingSession = null;
         });
 
         session.on("ended", () => {
           console.log("Cuộc gọi kết thúc");
-          me.session = null;
           me.incomingSession = null;
+          me.outgoingSession = null;
         });
 
         session.on("accepted", () => {
           audioPlayer.stop("ringing");
           console.log("Đã bắt máy");
-
-          me.session = session;
-          me.incomingSession = null;
         });
 
-        session.on("confirmed", () => {
-          console.log("incoming confirmed");
-          var localStream = session.connection.getLocalStreams()[0];
-          var dtmfSender = session.connection.createDTMFSender(
-            localStream.getAudioTracks()[0]
-          );
-          session.sendDTMF = function (tone) {
-            dtmfSender.insertDTMF(tone);
-          };
-
-          console.log({ incommingStream: localStream });
-          localAudio.srcObject = localStream;
-          const playPromise = localAudio.play();
-          if (playPromise !== undefined) {
-            playPromise
-              .then(function () {
-                // Automatic playback started!
-              })
-              .catch(function (error) {
-                // Automatic playback failed.
-                // Show a UI element to let the user manually start playback.
-              });
-          }
-        });
-
-        session.on("peerconnection", (e) => {
-          console.log("inbound incomming peerconnection: ", e);
-          const peerconnection = e.peerconnection;
-
-          peerconnection.onaddstream = function (e) {
-            // set remote audio stream (to listen to remote audio)
-            // remoteAudio is <audio> element on pag
-            console.log("incomming addstream: ", e.stream);
-
-            remoteAudio.srcObject = e.stream;
-            const playPromise = remoteAudio.play();
-
+        session.on("confirmed", function () {
+          //the call has connected, and audio is playing
+          const localStream = session.connection.getLocalStreams()[0];
+          if (localStream) {
+            localAudio.srcObject = localStream;
+            const playPromise = localAudio.play();
             if (playPromise !== undefined) {
               playPromise
                 .then(function () {
-                  // Automatic playback started!
+                  console.log("play audio local stream successfull!");
                 })
                 .catch(function (error) {
-                  // Automatic playback failed.
-                  // Show a UI element to let the user manually start playback.
+                  console.log(
+                    `play audio local stream error with ${error.message}`
+                  );
                 });
             }
-          };
+
+            dtmfSender = session.connection.createDTMFSender(
+              localStream.getAudioTracks()[0]
+            );
+          }
         });
 
+        session.on("addstream", function (e) {
+          me.remoteStream(e.stream);
+        });
+        // stream
+        const peerconnection = session.connection;
+        if (peerconnection) {
+          const localStream = peerconnection.getLocalStreams()[0];
+          const remoteStream = peerconnection.getRemoteStreams()[0];
+
+          if (localStream) {
+            localAudio.srcObject = localStream;
+            const playPromise = localAudio.play();
+            if (playPromise !== undefined) {
+              playPromise
+                .then(function () {
+                  console.log("play audio local stream successfull!");
+                })
+                .catch(function (error) {
+                  console.log(
+                    `play audio local stream error with ${error.message}`
+                  );
+                });
+            }
+          }
+
+          if (remoteStream) {
+            console.log("already have a remote stream");
+            me.handleRemoteStream(remoteStream);
+          }
+
+          peerconnection.addEventListener("addstream", (event) => {
+            console.log('peerconnection "addstream" event');
+
+            if (!me._mounted) {
+              console.log("_handleRemoteStream() | component not mounted");
+              return;
+            }
+
+            me.handleRemoteStream(event.stream);
+          });
+          //end stream
+        }
+
+        session.on("peerconnection", function (data) {
+          data.peerconnection.addEventListener("addstream", function (e) {
+            console.log('peerconnection "addstream" event');
+
+            if (!me._mounted) {
+              console.log("_handleRemoteStream() | component not mounted");
+              return;
+            }
+
+            me.handleRemoteStream(event.stream);
+          });
+        });
+
+        if (session.direction === "incoming") {
+          console.log("inbound");
+        } else {
+          console.log("outbound");
+          console.log("con", session.connection);
+          session.connection.addEventListener("addstream", function (e) {
+            me.handleRemoteStream(e.stream);
+          });
+        }
         // show popup
         console.log({ data });
         const {
@@ -297,17 +350,85 @@ export default {
     onDisConnected() {
       const me = this;
       this.sipPhone.on("disconnected", function (e) {
+        if (!me._mounted) return;
+
         console.log('UA "disconnected" event');
         me.statusCall = 'UA "disconnected" event';
       });
     },
     // event outbound
+    handleRemoteStream(remoteStream) {
+      // play audio remote
+      const me = this;
+      const remoteAudio = me.$refs.remoteAudio;
+      const localAudio = me.$refs.localAudio;
+
+      remoteAudio.srcObject = remoteStream;
+      const playPromise = remoteAudio.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(function () {
+            console.log("play audio remote stream successfull!");
+          })
+          .catch(function (error) {
+            console.log(`play audio remote stream error with ${error.message}`);
+          });
+      }
+
+      remoteStream.addEventListener("addtrack", (event) => {
+        const track = event.track;
+        if (remoteAudio.srcObject !== remoteStream) return;
+
+        console.log('remote stream "addtrack" event [track:%o]', track);
+        // Refresh remote audio
+        remoteAudio.srcObject = stream;
+        const playPromise = remoteAudio.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(function () {
+              console.log("play audio remote stream successfull!");
+            })
+            .catch(function (error) {
+              console.log(
+                `play audio remote stream error with ${error.message}`
+              );
+            });
+        }
+
+        track.addEventListener("ended", () => {
+          console.log('remote track "ended" event [track:%o]', track);
+        });
+      });
+
+      remoteStream.addEventListener("removetrack", () => {
+        if (remoteAudio.srcObject !== remoteStream) return;
+
+        console.log('remote stream "removetrack" event');
+
+        // Refresh remote audio
+        remoteAudio.srcObject = remoteStream;
+        const playPromise = remoteAudio.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(function () {
+              console.log("play audio remote stream successfull!");
+            })
+            .catch(function (error) {
+              console.log(
+                `play audio remote stream error with ${error.message}`
+              );
+            });
+        }
+      });
+    },
+
     makeCall() {
       // var fixed = this.phoneNumber.replace(/[^a-zA-Z0-9*#/.@]/g, "");
       const me = this;
       console.log("handle out going call ...");
       const remoteAudio = me.$refs.remoteAudio;
       const localAudio = me.$refs.localAudio;
+
       this.statusCode = "call out to uri: " + this.phoneNumber;
       const uri = this.phoneNumber;
       const outgoingSession = this.sipPhone.call(uri, {
@@ -318,8 +439,9 @@ export default {
         },
       });
 
+      me.outgoingSession = outgoingSession;
       outgoingSession.on("connecting", () => {
-        me.session = outgoingSession;
+        me.outgoingSession = outgoingSession;
 
         console.log(`Đang kết nối tới ${uri}`);
         me.statusCall = `Đang kết nối tới ${uri}`;
@@ -334,7 +456,7 @@ export default {
       outgoingSession.on("failed", (data) => {
         audioPlayer.stop("ringback");
         audioPlayer.play("rejected");
-        me.session = null;
+        me.outgoingSession = null;
 
         console.log("Khởi tạo cuộc gọi ra thất bại");
         me.statusCall = "Khởi tạo cuộc gọi ra thất bại";
@@ -347,7 +469,7 @@ export default {
 
       outgoingSession.on("ended", () => {
         audioPlayer.stop("ringback");
-        me.session = null;
+        me.outgoingSession = null;
 
         console.log("Cuộc gọi kết thúc");
         me.statusCall = "Cuộc gọi kết thúc";
@@ -361,45 +483,165 @@ export default {
         me.statusCall = "Đang nghe máy";
       });
 
-      outgoingSession.on("confirmed", () => {
-        console.log("outbound confirmed");
-
+      outgoingSession.on("confirmed", function () {
+        //the call has connected, and audio is playing
+        console.log("outgoing confirmed");
         const localStream = outgoingSession.connection.getLocalStreams()[0];
-        console.log({ outgoingStream: localStream });
-
-        localAudio.srcObject = localStream;
-        const playPromise = localAudio.play();
-
-        if (playPromise !== undefined) {
-          playPromise
-            .then(function () {
-              // Automatic playback started!
-            })
-            .catch(function (error) {
-              // Automatic playback failed.
-              // Show a UI element to let the user manually start playback.
-            });
+        if (localStream) {
+          localAudio.srcObject = localStream;
+          const playPromise = localAudio.play();
+          if (playPromise !== undefined) {
+            playPromise
+              .then(function () {
+                console.log("play audio local stream successfull!");
+              })
+              .catch(function (error) {
+                console.log(
+                  `play audio local stream error with ${error.message}`
+                );
+              });
+          }
         }
+      });
+
+      outgoingSession.on("addstream", function (e) {
+        console.log("outgoing addstream");
+        me.remoteStream(e.stream);
       });
 
       if (outgoingSession) {
         outgoingSession.connection.addEventListener("addstream", (e) => {
-          console.log("outbound addstream: ", e.stream);
-          remoteAudio.srcObject = e.stream;
-          const playPromise = remoteAudio.play();
+          console.log("outgoing outgoingSession.connection.addstream");
 
+          me.handleRemoteStream(e.stream);
+        });
+      }
+
+      outgoingSession.on("peerconnection", function (data) {
+        console.log("outgoing on peerconnection");
+        data.peerconnection.addEventListener("addstream", function (event) {
+          console.log('peerconnection "addstream" event');
+
+          // if (!me._mounted) {
+          //   console.log("_handleRemoteStream() | component not mounted");
+          //   return;
+          // }
+
+          me.handleRemoteStream(event.stream);
+        });
+      });
+    },
+    eventHandlers() {
+      const me = this;
+      if (!me.outgoingSession) return;
+
+      const remoteAudio = me.$refs.remoteAudio;
+      const localAudio = me.$refs.localAudio;
+
+      const session = me.outgoingSession;
+      const peerconnection = session.connection;
+      if (peerconnection) {
+        const localStream = peerconnection.getLocalStreams()[0];
+        const remoteStream = peerconnection.getRemoteStreams()[0];
+
+        // Handle local stream
+        if (localStream) {
+          // Display local stream
+          localAudio.srcObject = localStream;
+          const playPromise = localAudio.play();
           if (playPromise !== undefined) {
             playPromise
               .then(function () {
-                // Automatic playback started!
+                console.log("play audio local stream successfull!");
               })
               .catch(function (error) {
-                // Automatic playback failed.
-                // Show a UI element to let the user manually start playback.
+                console.log(
+                  `play audio local stream error with ${error.message}`
+                );
               });
           }
+        }
+
+        // If incoming all we already have the remote stream
+        if (remoteStream) {
+          console.log("already have a remote stream");
+
+          me.handleRemoteStream(remoteStream);
+        }
+
+        if (session.isEstablished()) {
+          console.log({ isEstablished: true });
+        }
+
+        session.on("progress", (data) => {
+          if (!me._mounted) return;
+
+          console.log(`session "progress" event [data:${data}]`);
+
+          if (session.direction === "outgoing") {
+            console.log("ringing ...");
+          }
+        });
+
+        session.on("accepted", (data) => {
+          if (!me._mounted) return;
+
+          console.log(`session "accepted" event [data:${data}]`);
+
+          if (session.direction === "outgoing") {
+            me.$notify({ type: "error", message: "Call answered" });
+          }
+
+          console.log(`both holding...`);
+        });
+
+        session.on("failed", (data) => {
+          if (!me._mounted) return;
+          console.log(`session "failed" event [data:${data}]`);
+
+          me.$notify({
+            type: "error",
+            message: `Call failed Call Cause: ${data.cause}`,
+          });
+
+          if (session.direction === "outgoing") {
+            console.log("failed");
+          }
+        });
+
+        session.on("ended", (data) => {
+          if (!me._mounted) return;
+
+          console.log(`session "ended" event [data:${data}]`);
+          me.$notify({
+            type: "error",
+            message: `Call ended Call Cause: ${data.cause}`,
+          });
+
+          if (session.direction === "outgoing") {
+            console.log("ended");
+          }
+        });
+
+        peerconnection.addEventListener("addstream", (event) => {
+          console.log('peerconnection "addstream" event');
+
+          me.handleRemoteStream(event.stream);
         });
       }
+
+      session.on("peerconnection", function (data) {
+        data.peerconnection.addEventListener("addstream", function (e) {
+          console.log('peerconnection "addstream" event');
+
+          // if (!me._mounted) {
+          //   console.log("_handleRemoteStream() | component not mounted");
+          //   return;
+          // }
+
+          me.handleRemoteStream(e.stream);
+        });
+      });
     },
     rejectCall() {
       console.log("Reject call incoming");
