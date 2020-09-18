@@ -12,14 +12,14 @@
       <el-button @click="answerCall">Nghe máy</el-button>
       <el-button @click="rejectCall">Gác máy</el-button>
       <el-button @click="exitPhone">Thoát</el-button>
+      <el-button @click="setMute">setMute</el-button>
+      <el-button @click="setHold">setHold</el-button>
     </div>
     <div class="test-audio">
       <el-button @click="handleRinging">Ringing</el-button>
       <el-button @click="handleRingback">Ringback</el-button>
       <el-button @click="handleAnswer">Answered</el-button>
       <el-button @click="handleReject">Rejected</el-button>
-      <el-button @click="setMute">setMute</el-button>
-      <el-button @click="setHold">setHold</el-button>
     </div>
 
     <audio ref="localAudio" id="localAudio" controls>
