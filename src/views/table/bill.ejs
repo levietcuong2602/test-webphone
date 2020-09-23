@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <style type="text/css">
+      body {
+        padding: 20px;
+      }
+
+      .company {
+        text-transform: uppercase;
+      }
+
+      .address {
+        font-size: 0.9em;
+      }
+
+      .title {
+        text-transform: uppercase;
+        text-align: center;
+        margin: 10px 0 0 0;
+      }
+
+      .date {
+        font-style: italic;
+        font-size: 0.9em;
+        text-align: center;
+        margin-top: 8px;
+      }
+
+      .date:nth-last-child(2) {
+        text-align: right;
+      }
+
+      .bill-id {
+        text-align: center;
+        margin-top: 8px;
+      }
+
+      .bill-id > span {
+        font-weight: 600;
+      }
+
+      .info {
+        margin: 50px 0;
+      }
+
+      .info div {
+        display: grid;
+        grid-template-columns: 3fr 7fr;
+        margin-bottom: 15px;
+      }
+
+      .info div span:nth-child(2) {
+        font-weight: 600;
+      }
+
+      .name {
+        text-transform: uppercase;
+        font-weight: 600;
+      }
+
+      .signatures {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        margin-top: 30px;
+      }
+
+      .signatures div {
+        text-align: center;
+      }
+
+      .signatures div div:first-child {
+        font-weight: 600;
+        margin-bottom: 100px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="company"><%= company %></div>
+    <div class="address"><%= companyAddress %></div>
+
+    <h2 class="title">Phiếu chi</h2>
+    <div class="date">
+      Ngày <%= billDate.split('/')[0] %> tháng <%= billDate.split('/')[1] %> năm
+      <%= billDate.split('/')[2] %>
+    </div>
+    <div class="bill-id">Số phiếu: <span>0000001234</span></div>
+
+    <div class="info">
+      <div>
+        <span>Họ và tên người nộp tiền:</span>
+        <span class="name"><%= name %></span>
+      </div>
+
+      <div>
+        <span>Địa chỉ:</span>
+        <span><%= address %></span>
+      </div>
+
+      <div>
+        <span>Lý do chi:</span>
+        <span><%= paymentReason %></span>
+      </div>
+
+      <div>
+        <span>Số tiền:</span>
+        <span><%= amount %></span>
+      </div>
+
+      <div>
+        <span>Viết bằng chữ:</span>
+        <span><%= handyAmount %></span>
+      </div>
+
+      <div>
+        <span>Chứng từ gốc:</span>
+        <span><%= source %></span>
+      </div>
+    </div>
+    <div class="date">Ngày 10 tháng 03 năm 2020</div>
+    <div class="signatures">
+      <div>
+        <div>Giám đốc</div>
+        <div>(Ký, họ tên)</div>
+      </div>
+      <div>
+        <div>Kế toán trưởng</div>
+        <div>(Ký, họ tên)</div>
+      </div>
+      <div>
+        <div>Người nộp tiền</div>
+        <div>(Ký, họ tên)</div>
+      </div>
+      <div>
+        <div>Người lập phiếu</div>
+        <div>(Ký, họ tên)</div>
+      </div>
+      <div>
+        <div>Thủ quỹ</div>
+        <div>(Ký, họ tên)</div>
+      </div>
+    </div>
+  </body>
+</html>

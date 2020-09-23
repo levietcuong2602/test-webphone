@@ -49,6 +49,7 @@ export default {
       setting: {
         rtcpMuxPolicy: "negotiate",
         iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }],
+        iceTransportPolicy: "all",
       },
       sipPhone: "",
       outgoingSession: null,
@@ -61,7 +62,7 @@ export default {
     this.registerUserAgent();
 
     // event out going session
-    this.eventHandlers();
+    // this.eventHandlers();
   },
   methods: {
     // tesst audio player
@@ -85,7 +86,6 @@ export default {
 
       console.log({ server });
       const socket = new JsSIP.WebSocketInterface(server);
-      console.log({ socket });
       const config = {
         sockets: [socket],
         uri: process.env.VUE_APP_AOR,
@@ -99,6 +99,7 @@ export default {
       console.log({ config });
       if (!config.username || !config.password) return;
       JsSIP.debug.enable("JsSIP:*");
+
       try {
         this.sipPhone = new JsSIP.UA(config);
       } catch (error) {
@@ -181,6 +182,8 @@ export default {
     onNewRTCSession() {
       // inbound
       const me = this;
+      const localAudio = me.$refs.localAudio;
+      const remoteAudio = me.$refs.remoteAudio;
       this.sipPhone.on("newRTCSession", function (data) {
         if (!me._mounted) return;
 
@@ -188,44 +191,36 @@ export default {
         me.statusCall = 'UA "newRTCSession" event';
 
         const { session } = data;
-        let dtmfSender;
         if (data.originator === "local") return;
-        // if (me.outgoingSession || me.incomingSession) {
-        //   console.log('incoming call replied with 486 "Busy Here"');
-        //   session.terminate({
-        //     status_code: 486,
-        //     reason_phrase: "Busy Here",
-        //   });
+        if (me.outgoingSession || me.incomingSession) {
+          console.log('incoming call replied with 486 "Busy Here"');
+          session.terminate({
+            status_code: 486,
+            reason_phrase: "Busy Here",
+          });
 
-        //   return;
-        // }
-
-        me.handleRinging();
-        console.log("Đang đổ chuông ...");
+          return;
+        }
 
         me.incomingSession = session;
-        session.on("failed", () => {
-          audioPlayer.stop("ringing");
+        console.log({ session });
+        // if (session.direction === "incoming") {
+        me.handleRinging();
 
-          console.log("Cuộc gọi thất bại");
-          me.incomingSession = null;
-          me.outgoingSession = null;
-        });
-
-        session.on("ended", () => {
-          console.log("Cuộc gọi kết thúc");
-          me.incomingSession = null;
-          me.outgoingSession = null;
-        });
+        console.log("Đang đổ chuông ...");
 
         session.on("accepted", () => {
+          console.log("Sự kiện accepted gọi vào");
           audioPlayer.stop("ringing");
           console.log("Đã bắt máy");
         });
 
         session.on("confirmed", function () {
+          console.log("Sự kiện confirmed gọi vào");
           //the call has connected, and audio is playing
           const localStream = session.connection.getLocalStreams()[0];
+          console.log({ localStream });
+          // let dtmfSender;
           if (localStream) {
             localAudio.srcObject = localStream;
             const playPromise = localAudio.play();
@@ -241,79 +236,60 @@ export default {
                 });
             }
 
-            dtmfSender = session.connection.createDTMFSender(
-              localStream.getAudioTracks()[0]
-            );
+            // dtmfSender = session.connection.createDTMFSender(
+            //   localStream.getAudioTracks()[0]
+            // );
           }
         });
 
-        session.on("addstream", function (e) {
-          me.remoteStream(e.stream);
+        session.on("ended", () => {
+          console.log("Sự kiện ended gọi vào");
+          console.log("Cuộc gọi kết thúc");
+          me.incomingSession = null;
+          me.outgoingSession = null;
         });
-        // stream
-        const peerconnection = session.connection;
-        if (peerconnection) {
-          const localStream = peerconnection.getLocalStreams()[0];
-          const remoteStream = peerconnection.getRemoteStreams()[0];
 
-          if (localStream) {
-            localAudio.srcObject = localStream;
-            const playPromise = localAudio.play();
-            if (playPromise !== undefined) {
-              playPromise
-                .then(function () {
-                  console.log("play audio local stream successfull!");
-                })
-                .catch(function (error) {
-                  console.log(
-                    `play audio local stream error with ${error.message}`
-                  );
-                });
-            }
-          }
+        session.on("failed", () => {
+          console.log("Sự kiện failed gọi vào");
+          audioPlayer.stop("ringing");
+          console.log("Cuộc gọi thất bại");
 
-          if (remoteStream) {
-            console.log("already have a remote stream");
-            me.handleRemoteStream(remoteStream);
-          }
-
-          peerconnection.addEventListener("addstream", (event) => {
-            console.log('peerconnection "addstream" event');
-
-            if (!me._mounted) {
-              console.log("_handleRemoteStream() | component not mounted");
-              return;
-            }
-
-            me.handleRemoteStream(event.stream);
-          });
-          //end stream
-        }
-
-        session.on("peerconnection", function (data) {
-          data.peerconnection.addEventListener("addstream", function (e) {
-            console.log('peerconnection "addstream" event');
-
-            if (!me._mounted) {
-              console.log("_handleRemoteStream() | component not mounted");
-              return;
-            }
-
-            me.handleRemoteStream(event.stream);
-          });
+          me.incomingSession = null;
+          me.outgoingSession = null;
         });
 
         if (session.direction === "incoming") {
-          console.log("inbound");
-        } else {
-          console.log("outbound");
-          console.log("con", session.connection);
-          session.connection.addEventListener("addstream", function (e) {
+          session.on("addstream", function (e) {
+            console.log("Sự kiện addstream gọi vào");
             me.handleRemoteStream(e.stream);
           });
         }
-        // show popup
+        // stream
+        session.on("peerconnection", function (dataP) {
+          dataP.peerconnection.addEventListener("addstream", function (e) {
+            console.log('peerconnection "addstream" event');
+            console.log({ mounted: me._mounted });
+            if (!me._mounted) {
+              console.log("_handleRemoteStream() | component not mounted");
+              return;
+            }
+
+            me.handleRemoteStream(event.stream);
+          });
+          dataP.peerconnection.addEventListener("removeStream", function (e) {
+            console.log('peerconnection "removeStream" event');
+            if (!me._mounted) {
+              console.log("_handleRemoteStream() | component not mounted");
+              return;
+            }
+
+            remoteAudio.srcObject = null;
+            remoteAudio.stop();
+          });
+        });
         console.log({ data });
+
+        // show popup
         const {
           request: {
             from: { _display_name },
@@ -345,6 +321,7 @@ export default {
 
             me.rejectCall();
           });
+        // }
       });
     },
     onDisConnected() {
@@ -358,10 +335,10 @@ export default {
     },
     // event outbound
     handleRemoteStream(remoteStream) {
+      console.log("handleRemoteStream: ", remoteStream);
       // play audio remote
       const me = this;
       const remoteAudio = me.$refs.remoteAudio;
-      const localAudio = me.$refs.localAudio;
 
       remoteAudio.srcObject = remoteStream;
       const playPromise = remoteAudio.play();
@@ -381,14 +358,14 @@ export default {
 
         console.log('remote stream "addtrack" event [track:%o]', track);
         // Refresh remote audio
-        remoteAudio.srcObject = stream;
+        remoteAudio.srcObject = remoteStream;
         const playPromise = remoteAudio.play();
         if (playPromise !== undefined) {
           playPromise
-            .then(function () {
+            .then(() => {
               console.log("play audio remote stream successfull!");
             })
-            .catch(function (error) {
+            .catch((error) => {
               console.log(
                 `play audio remote stream error with ${error.message}`
               );
@@ -402,23 +379,10 @@ export default {
 
       remoteStream.addEventListener("removetrack", () => {
         if (remoteAudio.srcObject !== remoteStream) return;
-
         console.log('remote stream "removetrack" event');
 
         // Refresh remote audio
-        remoteAudio.srcObject = remoteStream;
-        const playPromise = remoteAudio.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(function () {
-              console.log("play audio remote stream successfull!");
-            })
-            .catch(function (error) {
-              console.log(
-                `play audio remote stream error with ${error.message}`
-              );
-            });
-        }
+        remoteAudio.srcObject = null;
       });
     },
 
@@ -426,7 +390,6 @@ export default {
       // var fixed = this.phoneNumber.replace(/[^a-zA-Z0-9*#/.@]/g, "");
       const me = this;
       console.log("handle out going call ...");
-      const remoteAudio = me.$refs.remoteAudio;
       const localAudio = me.$refs.localAudio;
 
       this.statusCode = "call out to uri: " + this.phoneNumber;
@@ -506,7 +469,7 @@ export default {
 
       outgoingSession.on("addstream", function (e) {
         console.log("outgoing addstream");
-        me.remoteStream(e.stream);
+        me.handleRemoteStream(e.stream);
       });
 
       if (outgoingSession) {
@@ -521,12 +484,6 @@ export default {
         console.log("outgoing on peerconnection");
         data.peerconnection.addEventListener("addstream", function (event) {
           console.log('peerconnection "addstream" event');
-
-          // if (!me._mounted) {
-          //   console.log("_handleRemoteStream() | component not mounted");
-          //   return;
-          // }
-
           me.handleRemoteStream(event.stream);
         });
       });
@@ -645,13 +602,27 @@ export default {
     },
     rejectCall() {
       console.log("Reject call incoming");
-      console.log({ incomingSession: this.incomingSession });
-      this.incomingSession.terminate();
+      console.log({
+        incomingSession: this.incomingSession,
+        outgoingSession: this.outgoingSession,
+      });
+      if (this.incomingSession) {
+        this.incomingSession.terminate();
+      }
+      if (this.outgoingSession) {
+        this.outgoingSession.terminate();
+      }
     },
     answerCall() {
       console.log("Anwser call incoming");
       console.log({ incomingSession: this.incomingSession });
-      this.incomingSession.answer({ pcConfig: this.setting });
+      this.incomingSession.answer({
+        pcConfig: this.setting,
+        mediaConstraints: {
+          audio: true,
+          video: false,
+        },
+      });
     },
     setMute(value) {
       if (value) {

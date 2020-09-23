@@ -1,7 +1,7 @@
 <template>
   <div id="app">
     <router-view />
-    <audio id="remoteAudio" controls>
+    <audio id="remoteAudio">
       <p>Your browser doesn't support HTML5 audio.</p>
     </audio>
   </div>

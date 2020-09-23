@@ -74,10 +74,10 @@ export default {
     registerUserAgent() {
       // eslint-disable-next-line
       const config = {
-        uri: process.env.VUE_APP_AOR,
-        wsServers: [process.env.VUE_APP_WS_SERVER], // +':7443'
-        authorizationUser: process.env.VUE_APP_USER,
-        password: process.env.VUE_APP_PASS,
+        uri: "sip:10001@devsip.vbeecore.com",
+        wsServers: ["wss://devsip.vbeecore.com:65443"], // +':7443'
+        authorizationUser: "10001",
+        password: "1234",
         userAgentString: "WebPhone/0.0.1",
       };
 
