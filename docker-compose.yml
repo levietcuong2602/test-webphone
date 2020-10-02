@@ -8,7 +8,7 @@ services:
       - 3000:3000
     environment:
       port: 3000
-      VUE_APP_WS_SERVER: wss://devsip.vbeecore.com:65443
+      VUE_APP_WS_SERVER: wss://devsip.vbeecore.com:7443
       VUE_APP_AOR: sip:10001@devsip.vbeecore.com
       VUE_APP_PASS: 1234
       VUE_APP_USER: 10001
@@ -22,7 +22,7 @@ services:
       - 3001:3001
     environment:
       port: 3001
-      VUE_APP_WS_SERVER: wss://devsip.vbeecore.com:65443
+      VUE_APP_WS_SERVER: wss://devsip.vbeecore.com:7443
       VUE_APP_AOR: sip:10000@devsip.vbeecore.com
       VUE_APP_PASS: 1234
       VUE_APP_USER: 10000

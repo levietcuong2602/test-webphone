@@ -1,9 +1,19 @@
 <template>
   <div class="session">
-    <video ref="localVideo" :class="{'local-video': localHasVideo}" autoplay muted />
-    <video ref="remoteVideo" :class="{'remote-video': !noRemoteVideo}" autoplay />
+    <audio ref="localAudio" id="localAudio" controls>
+      <p>Your browser doesn't support HTML5 audio.</p>
+    </audio>
 
-    <div v-if="noRemoteVideo" class="no-remote-video-info">{{ noRemoteVideo }}</div>
+    <audio ref="remoteAudio" id="remoteAudio" controls>
+      <p>Your browser doesn't support HTML5 audio.</p>
+    </audio>
+
+    <div class="no-remote-video-info" v-if="noRemoteAudio">{{noRemoteAudio}}</div>
+    <div class="controls">
+      <el-button @click="handleHangUp">Gác máy</el-button>
+      <el-button @click="handleHold">Pause</el-button>
+      <el-button @click="handleResume">Resume</el-button>
+    </div>
   </div>
 </template>
 
@@ -11,88 +21,105 @@
 export default {
   data() {
     return {
-      noRemoteVideo: "",
+      noRemoteAudio: "",
       localHasVideo: false,
       remoteHasVideo: false,
       localHold: false,
       remoteHold: false,
       canHold: false,
       ringing: false,
+      _mounted: false,
     };
   },
   props: {
     session: Object,
   },
   methods: {
-    _checkRemoteVideo(stream) {
-      const videoTrack = stream.getVideoTracks()[0];
-      this.remoteHasVideo = Boolean(videoTrack);
+    handleHangUp() {
+      console.log("handleHangUp()");
+
+      this.session.terminate();
+    },
+
+    handleHold() {
+      console.log("handleHold()");
+
+      this.session.hold({ useUpdate: true });
+    },
+
+    handleResume() {
+      console.log("handleResume()");
+
+      this.session.unhold({ useUpdate: true });
+    },
+    _checkRemoteAudio(stream) {
+      if (this._mounted) {
+        // const videoTrack = stream.getVideoTracks()[0];
+        // this.remoteHasVideo = Boolean(videoTrack);
+      }
     },
     _handleRemoteStream(stream) {
       const me = this;
-      console.log("_handleRemoteStream() [stream:%o]", stream);
-      const remoteVideo = this.refs.remoteVideo;
+      console.log(`_handleRemoteStream() [stream:${stream}]`);
+      const remoteAudio = this.$refs.remoteAudio;
       // Display remote stream
-      remoteVideo.srcObject = stream;
-      this._checkRemoteVideo(stream);
+      remoteAudio.srcObject = stream;
+      this._checkRemoteAudio(stream);
 
       stream.addEventListener("addtrack", (event) => {
         const track = event.track;
-        if (remoteVideo.srcObject !== stream) return;
-        console.log('remote stream "addtrack" event [track:%o]', track);
+        if (remoteAudio.srcObject !== stream) return;
+
+        console.log(`remote stream "addtrack" event [track:${track}]`);
 
         // Refresh remote video
-        remoteVideo.srcObject = stream;
-        me._checkRemoteVideo(stream);
+        remoteAudio.srcObject = stream;
+
+        me._checkRemoteAudio(stream);
+
         track.addEventListener("ended", () => {
-          console.log('remote track "ended" event [track:%o]', track);
+          console.log(`remote track "ended" event [track:${track}]`);
         });
       });
 
       stream.addEventListener("removetrack", () => {
-        if (remoteVideo.srcObject !== stream) return;
+        if (remoteAudio.srcObject !== stream) return;
         console.log('remote stream "removetrack" event');
         // Refresh remote video
-        remoteVideo.srcObject = stream;
-        me._checkRemoteVideo(stream);
+        remoteAudio.srcObject = stream;
+        me._checkRemoteAudio(stream);
       });
     },
   },
-  created() {
-    if (this.session.isInProgress() && !this.ringing)
-      this.noRemoteVideo = <div class="message">connecting ...</div>;
-    else if (this.ringing)
-      this.noRemoteVideo = <div class="message">ringing ...</div>;
-    else if (this.localHold && this.remoteHold)
-      this.noRemoteVideo = <div class="message">both hold</div>;
-    else if (this.localHold)
-      this.noRemoteVideo = <div class="message">local hold</div>;
-    else if (this.remoteHold)
-      this.noRemoteVideo = <div class="message">remote hold</div>;
-    else if (!this.remoteHasVideo)
-      this.noRemoteVideo = <div class="message">no remote video</div>;
-  },
   mounted() {
-    const localVideo = this.refs.localVideo;
+    console.log({ session: this.session });
+
+    if (this.session.isInProgress() && !this.ringing)
+      this.noRemoteAudio = <div class="message">connecting ...</div>;
+    else if (this.ringing)
+      this.noRemoteAudio = <div class="message">ringing ...</div>;
+    else if (this.localHold && this.remoteHold)
+      this.noRemoteAudio = <div class="message">both hold</div>;
+    else if (this.localHold)
+      this.noRemoteAudio = <div class="message">local hold</div>;
+    else if (this.remoteHold)
+      this.noRemoteAudio = <div class="message">remote hold</div>;
+    else if (!this.remoteHasVideo)
+      this.noRemoteAudio = <div class="message">no remote video</div>;
+
+    const localAudio = this.$refs.localAudio;
     const session = this.session;
     const peerconnection = session.connection;
     const localStream = peerconnection.getLocalStreams()[0];
     const remoteStream = peerconnection.getRemoteStreams()[0];
+    this._mounted = true;
 
+    console.log({ localStream, remoteStream });
     const me = this;
     // Handle local stream
     if (localStream) {
-      // Clone local stream
-      me._localClonedStream = localStream.clone();
-
       // Display local stream
-      localVideo.srcObject = me._localClonedStream;
-
-      setTimeout(() => {
-        if (localStream.getVideoTracks()[0]) {
-          me.localHasVideo = true;
-        }
-      }, 1000);
+      localAudio.srcObject = localStream;
     }
 
     // If incoming all we already have the remote stream
