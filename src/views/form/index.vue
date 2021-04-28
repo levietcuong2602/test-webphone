@@ -59,7 +59,11 @@ export default {
   },
   mounted() {
     this._mounted = true;
-    this.registerUserAgent();
+    try {
+      this.registerUserAgent();
+    } catch (error) {
+      console.log({ errorMessage: error.message });
+    }
 
     // event out going session
     // this.eventHandlers();
@@ -82,21 +86,23 @@ export default {
     // init call
     registerUserAgent() {
       // eslint-disable-next-line
-      const server = process.env.VUE_APP_WS_SERVER + "/ws";
+      // const server = process.env.VUE_APP_WS_SERVER + "/ws";
+      const domain = "dev-sip.aicallcenter.vn";
+      // const domain = "devsip.vbeecore.com";
+      const server = `wss://${domain}:7443/ws`;
 
-      console.log({ server });
       const socket = new JsSIP.WebSocketInterface(server);
       const config = {
         sockets: [socket],
-        uri: process.env.VUE_APP_AOR,
-        password: process.env.VUE_APP_PASS,
-        username: process.env.VUE_APP_USER,
+        uri: `sip:1001@${domain}`,
+        password: "1234",
+        username: "1001",
         register: true,
         session_timers: false,
         use_preloaded_route: false,
       };
 
-      console.log({ config });
+      console.log({ socket, config });
       if (!config.username || !config.password) return;
       JsSIP.debug.enable("JsSIP:*");
 
